@@ -1,23 +1,23 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="絶望要塞風 ブロック崩し", layout="centered")
+st.set_page_config(page_title="絶望要塞風 円形ハッキング", layout="centered")
 
 st.title("密室脱出：セキュリティ・ハッキング")
-st.caption("迫り来るレーザー（ブロック）をすべて破壊し、脱出ゲートを開け！")
+st.caption("中心のコアを守る回転レーザーを破壊し、セキュリティを解除せよ！")
 
-# 画面サイズの設定
-canvas_width = 640
-canvas_height = 480
-component_height = canvas_height + 120  # ボタンやスコア表示の余白を含めた全体の高さ
+# 画面サイズの設定（画像に合わせて正方形に近い形に調整）
+canvas_width = 600
+canvas_height = 540
+component_height = canvas_height + 120
 
-# f-stringではなく、通常の文字列（トリプルクォーテーション）で安全に定義
+# JavaScript & HTML5 Canvas による円形ブロック崩しコード
 game_code = """
 <div style="text-align: center; font-family: monospace;">
-    <canvas id="gameCanvas" style="background: #111; border: 4px solid #00ff00; box-shadow: 0 0 20px #00ff00;"></canvas>
-    <div id="status" style="color: #00ff00; font-size: 22px; margin-top: 15px; height: 35px; font-weight: bold;">SCORE: 0</div>
-    <button id="retryBtn" style="background: #000; color: #00ff00; border: 2px solid #00ff00; padding: 10px 25px; font-size: 18px; font-family: monospace; cursor: pointer; margin-top: 10px; box-shadow: 0 0 10px #00ff00; border-radius: 4px;">
-        SYSTEM REBOOT (再挑戦)
+    <canvas id="gameCanvas" style="background: #2a1015; border: 4px solid #b8a265; box-shadow: 0 0 20px #ff3333;"></canvas>
+    <div id="status" style="color: #d1c292; font-size: 22px; margin-top: 15px; height: 35px; font-weight: bold;"></div>
+    <button id="retryBtn" style="background: #110002; color: #d1c292; border: 2px solid #b8a265; padding: 10px 25px; font-size: 18px; font-family: monospace; cursor: pointer; margin-top: 10px; border-radius: 4px; box-shadow: 0 0 10px #ff0000;">
+        SYSTEM REBOOT (再生・再挑戦)
     </button>
 </div>
 
@@ -27,33 +27,70 @@ const ctx = canvas.getContext("2d");
 const statusDiv = document.getElementById("status");
 const retryBtn = document.getElementById("retryBtn");
 
-// Pythonから渡されたサイズをJavaScript側で代入
 canvas.width = """ + str(canvas_width) + """;
 canvas.height = """ + str(canvas_height) + """;
 
 let animationId;
+let audioCtx = null;
 
-// パドル（プレイヤー）※画面拡大に合わせて調整
+// ゲーム状態管理
+let gameActive = false;
+
+// パドル（プレイヤー：画像のような黄緑と白のバー）
 let paddleHeight = 12;
-let paddleWidth = 100;
+let paddleWidth = 110;
 let paddleX;
 let rightPressed = false;
 let leftPressed = false;
 
-// ボール
-let ballRadius = 8;
+// ボール（追尾軌跡付きのハッキング弾）
+let ballRadius = 6;
 let x, y, dx, dy;
+let ballHistory = []; // 軌跡用
 
-// ブロック（防衛レーザー壁）
-let brickRowCount = 5;
-let brickColumnCount = 7; 
-let brickPadding = 12;
-let brickOffsetTop = 50;
-let brickOffsetLeft = 25;
-let brickWidth = (canvas.width - (brickOffsetLeft * 2) - (brickPadding * (brickColumnCount - 1))) / brickColumnCount;
-let brickHeight = 24;
-let score;
+// 円形ブロックの設定
+const centerX = canvas.width / 2;
+const centerY = canvas.height / 2 + 30;
 let bricks = [];
+let rotationAngle = 0; // 回転角度
+const rotationSpeed = 0.015; // 回転速度
+
+// タイマー設定（画像通りカウントダウン）
+let startTime;
+const timeLimit = 60; // 制限時間60秒
+let timeLeft = timeLimit;
+
+// サウンド生成
+function playSound(type) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+
+    if (type === 'paddle') {
+        osc.type = 'sine'; osc.frequency.setValueAtTime(500, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+        gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now); osc.stop(now + 0.08);
+    } else if (type === 'brick') {
+        osc.type = 'square'; osc.frequency.setValueAtTime(1000, now);
+        osc.frequency.setValueAtTime(1400, now + 0.05);
+        gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now); osc.stop(now + 0.08);
+    } else if (type === 'gameover') {
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, now);
+        osc.frequency.linearRampToValueAtTime(50, now + 0.8);
+        gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+        osc.start(now); osc.stop(now + 0.8);
+    } else if (type === 'start') {
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.3);
+        gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now); osc.stop(now + 0.3);
+    }
+}
 
 if (!window.keyEventsRegistered) {
     document.addEventListener("keydown", (e) => {
@@ -68,126 +105,207 @@ if (!window.keyEventsRegistered) {
 }
 
 function initGame() {
-    if (animationId) {
-        cancelAnimationFrame(animationId);
-    }
-    
+    if (animationId) cancelAnimationFrame(animationId);
+    playSound('start');
+
     paddleX = (canvas.width - paddleWidth) / 2;
     x = canvas.width / 2;
-    y = canvas.height - 40;
-    dx = 4; 
-    dy = -4;
-    score = 0;
-    statusDiv.innerHTML = "SCORE: 0";
-    statusDiv.style.color = "#00ff00";
+    y = canvas.height - 50;
+    dx = 4;
+    dy = -5;
+    ballHistory = [];
+    rotationAngle = 0;
+    gameActive = true;
+    startTime = Date.now();
 
-    for (let c = 0; c < brickColumnCount; c++) {
-        bricks[c] = [];
-        for (let r = 0; r < brickRowCount; r++) {
-            bricks[c][r] = { x: 0, y: 0, status: 1 };
-        }
-    }
+    // 円形ブロックの生成（内周と外周の2重構造）
+    bricks = [];
     
+    // 内周（半径90px, 8個のブロック）
+    for (let i = 0; i < 8; i++) {
+        bricks.push({ angleOffset: (Math.PI * 2 / 8) * i, radius: 90, width: 45, height: 18, status: 1 });
+    }
+    // 外周（半径140px, 10個のブロック）
+    for (let i = 0; i < 10; i++) {
+        bricks.push({ angleOffset: (Math.PI * 2 / 10) * i, radius: 140, width: 55, height: 18, status: 1 });
+    }
+
+    statusDiv.innerHTML = "";
     draw();
 }
 
 retryBtn.addEventListener("click", initGame);
 
+// 円形ブロックとの当たり判定
 function collisionDetection() {
-    for (let c = 0; c < brickColumnCount; c++) {
-        for (let r = 0; r < brickRowCount; r++) {
-            let b = bricks[c][r];
-            if (b.status == 1) {
-                if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
-                    dy = -dy;
-                    b.status = 0;
-                    score += 10;
-                    statusDiv.innerHTML = "SCORE: " + score;
-                    if (score == brickRowCount * brickColumnCount * 10) {
-                        statusDiv.innerHTML = "脱出成功！セキュリティ解除！";
-                        statusDiv.style.color = "#00ffff";
-                        dx = 0; dy = 0;
-                    }
+    for (let i = 0; i < bricks.length; i++) {
+        let b = bricks[i];
+        if (b.status === 1) {
+            // 現在の回転を考慮したブロックの角度
+            let currentAngle = b.angleOffset + rotationAngle;
+            // ブロックの中心座標を計算
+            let bX = centerX + Math.cos(currentAngle) * b.radius;
+            let bY = centerY + Math.sin(currentAngle) * b.radius;
+
+            // 簡易的な円形判定（ボールとの距離）
+            let dist = Math.hypot(x - bX, y - bY);
+            if (dist < (b.width / 2 + ballRadius)) {
+                // 反転（中心から外側へ向かうベクトルで反射）
+                let angleToBall = Math.atan2(y - centerY, x - centerX);
+                dx = Math.cos(angleToBall) * 5;
+                dy = Math.sin(angleToBall) * 5;
+                
+                b.status = 0;
+                playSound('brick');
+
+                // 全滅チェック
+                if (bricks.every(brick => brick.status === 0)) {
+                    gameActive = false;
+                    statusDiv.innerHTML = "脱出成功！セキュリティ解除！";
+                    statusDiv.style.color = "#00ffff";
                 }
+                break;
             }
+        }
+    }
+}
+
+function drawUI() {
+    // 外枠（画像のようなクラシックな装飾線）
+    ctx.strokeStyle = "#b8a265";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
+    
+    // スコア計算（破壊数）
+    let destroyed = bricks.filter(b => b.status === 0).length;
+    let total = bricks.length;
+    let scoreStr = String(destroyed).padStart(3, '0');
+
+    // UIテキスト描画（画像上のレイアウトを再現）
+    ctx.fillStyle = "#d1c292";
+    ctx.font = "20px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("⚫︎ BALL 1", 40, 45);
+    ctx.fillText("SCORE " + scoreStr + "/" + total, 200, 45);
+    
+    // タイマー描画
+    ctx.textAlign = "right";
+    ctx.fillText("TIMER " + timeLeft.toFixed(2), canvas.width - 40, 45);
+}
+
+function drawCore() {
+    // 中央の赤いコアコア（ハッキング目標）
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 30, 0, Math.PI * 2);
+    ctx.fillStyle = "#110002";
+    ctx.strokeStyle = "#ff3333";
+    ctx.lineWidth = 3;
+    ctx.fill();
+    ctx.stroke();
+    ctx.closePath();
+
+    // コア内の幾何学模様
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ff3333";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.closePath();
+}
+
+function drawBricks() {
+    rotationAngle += rotationSpeed; // 毎フレーム回転させる
+
+    for (let i = 0; i < bricks.length; i++) {
+        let b = bricks[i];
+        if (b.status === 1) {
+            let currentAngle = b.angleOffset + rotationAngle;
+            let bX = centerX + Math.cos(currentAngle) * b.radius;
+            let bY = centerY + Math.sin(currentAngle) * b.radius;
+
+            ctx.save();
+            ctx.translate(bX, bY);
+            ctx.rotate(currentAngle + Math.PI/2); // 円の接線方向に傾ける
+
+            // 画像のようなライトイエロー/黄緑のサイバーブロック
+            ctx.beginPath();
+            ctx.rect(-b.width / 2, -b.height / 2, b.width, b.height);
+            ctx.fillStyle = "rgba(209, 194, 146, 0.8)";
+            ctx.strokeStyle = "#fffbdf";
+            ctx.lineWidth = 1.5;
+            ctx.fill();
+            ctx.stroke();
+            ctx.closePath();
+            ctx.restore();
         }
     }
 }
 
 function drawBall() {
+    // 軌跡の描画（画像のように弾が線を引くエフェクト）
+    ballHistory.push({ x: x, y: y });
+    if (ballHistory.length > 8) ballHistory.shift();
+
+    for (let i = 0; i < ballHistory.length; i++) {
+        ctx.beginPath();
+        ctx.arc(ballHistory[i].x, ballHistory[i].y, ballRadius * (i / ballHistory.length), 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 255, 255, " + (i / ballHistory.length) * 0.4 + ")";
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    // 本体
     ctx.beginPath();
     ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
-    ctx.fillStyle = "#00ff00";
+    ctx.fillStyle = "#ffffff";
     ctx.fill();
     ctx.closePath();
 }
 
 function drawPaddle() {
-    ctx.beginPath();
-    ctx.rect(paddleX, canvas.height - paddleHeight - 8, paddleWidth, paddleHeight);
-    ctx.fillStyle = "#00ff00";
-    ctx.fill();
-    ctx.closePath();
-}
+    ctx.save();
+    // 画像通りの黄緑と白のツートンカラーパドル
+    let grad = ctx.createLinearGradient(paddleX, canvas.height - 35, paddleX, canvas.height - 35 + paddleHeight);
+    grad.addColorStop(0, "#ffffff");
+    grad.addColorStop(0.5, "#aaff00");
+    grad.addColorStop(1, "#66aa00");
 
-function drawBricks() {
-    for (let c = 0; c < brickColumnCount; c++) {
-        for (let r = 0; r < brickRowCount; r++) {
-            if (bricks[c][r].status == 1) {
-                let brickX = c * (brickWidth + brickPadding) + brickOffsetLeft;
-                let brickY = r * (brickHeight + brickPadding) + brickOffsetTop;
-                bricks[c][r].x = brickX;
-                bricks[c][r].y = brickY;
-                ctx.beginPath();
-                ctx.rect(brickX, brickY, brickWidth, brickHeight);
-                ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
-                ctx.strokeStyle = "#ff0000";
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                ctx.fill();
-                ctx.closePath();
-            }
-        }
-    }
+    ctx.beginPath();
+    ctx.rect(paddleX, canvas.height - 35, paddleWidth, paddleHeight);
+    ctx.fillStyle = grad;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "#aaff00";
+    ctx.fill();
+    ctx.restore();
 }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawBricks();
-    drawBall();
-    drawPaddle();
-    collisionDetection();
+    
+    // 背景をうっすら赤暗く
+    ctx.fillStyle = "#200a0d";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) dx = -dx;
-    if (y + dy < ballRadius) dy = -dy;
-    else if (y + dy > canvas.height - ballRadius - 8) {
-        if (x > paddleX && x < paddleX + paddleWidth) {
-            dy = -dy;
-        } else {
-            statusDiv.innerHTML = "GAME OVER：身柄が拘束されました";
+    // タイマー計算
+    if (gameActive) {
+        let elapsed = (Date.now() - startTime) / 1000;
+        timeLeft = Math.max(0, timeLimit - elapsed);
+        if (timeLeft <= 0) {
+            gameActive = false;
+            statusDiv.innerHTML = "TIME UP：セキュリティロックが作動しました";
             statusDiv.style.color = "#ff0000";
-            dx = 0; dy = 0;
-            return;
+            playSound('gameover');
         }
     }
 
-    if (rightPressed && paddleX < canvas.width - paddleWidth) paddleX += 6;
-    else if (leftPressed && paddleX > 0) paddleX -= 6;
+    drawUI();
+    drawCore();
+    drawBricks();
+    drawBall();
+    drawPaddle();
+    
+    if (gameActive) {
+        collisionDetection();
 
-    x += dx;
-    y += dy;
-    animationId = requestAnimationFrame(draw);
-}
-
-initGame();
-</script>
-"""
-
-# Streamlitアプリに埋め込み
-components.html(game_code, height=component_height)
-
-st.sidebar.markdown("""
-### 操作方法
-* **← / → キー**：パドルを移動
-* **SYSTEM REBOOT ボタン**：ゲームを最初からやり直す
-""")
+        // 壁反射
+        if (x + dx > canvas.width - 25 - ballRadius || x + dx < 25 + ballRadius) dx = -dx;
