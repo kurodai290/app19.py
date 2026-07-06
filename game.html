@@ -30,16 +30,13 @@ let ballHistory = [];
 const centerX = canvas.width / 2;
 const centerY = canvas.height / 2 + 30;
 
-// ブロックとコア（丸い中央ブロック）の設定
 let bricks = [];
 let rotationAngle = 0;
-const rotationSpeed = 0.015; // 周りの回転速度
+const rotationSpeed = 0.015;
 
-// 中央の丸いボスブロックのステータス
 const coreRadius = 35;
-let coreHP = 22; // ★22回当てないと壊れない
+let coreHP = 22;
 
-// タイマー設定
 let startTime;
 const timeLimit = 60;
 let timeLeft = timeLimit;
@@ -59,11 +56,11 @@ function playSound(type) {
         osc.start(now); osc.stop(now + 0.08);
     } else if (type === "brick") {
         osc.type = "square"; osc.frequency.setValueAtTime(1000, now);
-        osc.frequency.setValueAtTime(800, now + 0.05); // 障害物は少し鈍い音
+        osc.frequency.setValueAtTime(800, now + 0.05);
         gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
         osc.start(now); osc.stop(now + 0.08);
     } else if (type === "core_hit") {
-        osc.type = "triangle"; osc.frequency.setValueAtTime(800, now); // コア命中音
+        osc.type = "triangle"; osc.frequency.setValueAtTime(800, now);
         osc.frequency.exponentialRampToValueAtTime(1500, now + 0.1);
         gain.gain.setValueAtTime(0.25, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
         osc.start(now); osc.stop(now + 0.1);
@@ -106,15 +103,12 @@ function initGame() {
     gameActive = true;
     startTime = Date.now();
     
-    coreHP = 22; // HPリセット
+    coreHP = 22;
 
-    // ★周りのブロック数を少なく調整（内周4個、外周5個のみに減少）
     bricks = [];
-    // 内周（半径90px, 4個の壊れない盾）
     for (let i = 0; i < 4; i++) {
         bricks.push({ angleOffset: (Math.PI * 2 / 4) * i, radius: 95, width: 50, height: 18 });
     }
-    // 外周（半径145px, 5個の壊れない盾）
     for (let i = 0; i < 5; i++) {
         bricks.push({ angleOffset: (Math.PI * 2 / 5) * i, radius: 145, width: 60, height: 18 });
     }
@@ -126,16 +120,14 @@ function initGame() {
 retryBtn.addEventListener("click", initGame);
 
 function collisionDetection() {
-    // 1. 真ん中の丸いブロック（コア）との当たり判定
     if (coreHP > 0) {
         let distToCore = Math.hypot(x - centerX, y - centerY);
         if (distToCore < (coreRadius + ballRadius)) {
-            // 反射ベクトル計算（中心から外側へ弾き返す）
             let angle = Math.atan2(y - centerY, x - centerX);
             dx = Math.cos(angle) * 5.5;
             dy = Math.sin(angle) * 5.5;
             
-            coreHP--; // ダメージ
+            coreHP--;
             playSound("core_hit");
 
             if (coreHP <= 0) {
@@ -147,7 +139,6 @@ function collisionDetection() {
         }
     }
 
-    # 2. 周りの回転ブロック（壊れない障害物）との当たり判定
     for (let i = 0; i < bricks.length; i++) {
         let b = bricks[i];
         let currentAngle = b.angleOffset + rotationAngle;
@@ -159,8 +150,6 @@ function collisionDetection() {
             let angleToBall = Math.atan2(y - centerY, x - centerX);
             dx = Math.cos(angleToBall) * 5.5;
             dy = Math.sin(angleToBall) * 5.5;
-            
-            // ★ b.status=0 にしない（＝壊れないで跳ね返るだけ）
             playSound("brick"); 
             break;
         }
@@ -176,8 +165,6 @@ function drawUI() {
     ctx.font = "20px monospace";
     ctx.textAlign = "left";
     ctx.fillText("⚫︎ BALL 1", 40, 45);
-    
-    // スコアの代わりにコアの残り耐久値を表示
     ctx.fillText("CORE HP: " + String(coreHP).padStart(2, "0"), 200, 45);
     
     ctx.textAlign = "right";
@@ -187,10 +174,8 @@ function drawUI() {
 function drawCore() {
     if (coreHP <= 0) return;
 
-    // ★中央の丸いターゲットブロック
     ctx.beginPath();
     ctx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
-    // ダメージを受けると徐々に赤く光る演出
     ctx.fillStyle = "rgba(255, 50, 50, " + (0.2 + (22 - coreHP) * 0.03) + ")";
     ctx.strokeStyle = "#ff3333";
     ctx.lineWidth = 4;
@@ -198,14 +183,12 @@ function drawCore() {
     ctx.stroke();
     ctx.closePath();
 
-    // コアの中心点
     ctx.beginPath();
     ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
     ctx.fill();
     ctx.closePath();
 
-    // 残り回数のテキスト表示
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 16px monospace";
     ctx.textAlign = "center";
@@ -226,7 +209,6 @@ function drawBricks() {
         ctx.translate(bX, bY);
         ctx.rotate(currentAngle + Math.PI/2);
 
-        // 壊れない盾：少し重厚感のあるゴールド/グレーの防衛壁デザイン
         ctx.beginPath();
         ctx.rect(-b.width / 2, -b.height / 2, b.width, b.height);
         ctx.fillStyle = "rgba(120, 110, 90, 0.8)";
@@ -253,7 +235,6 @@ function drawBall() {
 
     ctx.beginPath();
     ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
-    ctx.ffffff;
     ctx.fillStyle = "#ffffff";
     ctx.fill();
     ctx.closePath();
@@ -303,3 +284,16 @@ function draw() {
         if (x + dx > canvas.width - 25 - ballRadius || x + dx < 25 + ballRadius) dx = -dx;
         if (y + dy < 60 + ballRadius) dy = -dy;
         
+        else if (y + dy > canvas.height - 35 - ballRadius) {
+            if (x > paddleX && x < paddleX + paddleWidth) {
+                let hitPos = (x - paddleX) / paddleWidth;
+                dx = 8 * (hitPos - 0.5);
+                dy = -Math.sqrt(40 - dx*dx);
+                playSound("paddle");
+            } else if (y + dy > canvas.height - 15) {
+                gameActive = false;
+                statusDiv.innerHTML = "GAME OVER：身柄が拘束されました";
+                statusDiv.style.color = "#ff0000";
+                playSound("gameover");
+                return;
+            }
