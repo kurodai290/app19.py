@@ -6,10 +6,8 @@ st.set_page_config(page_title="絶望要塞風 円形ハッキング", layout="c
 st.title("密室脱出：セキュリティ・ハッキング")
 st.caption("中心のコアを守る回転レーザーを破壊し、セキュリティを解除せよ！")
 
-# 画面サイズの設定（画像に合わせて正方形に近い形に調整）
-canvas_width = 600
-canvas_height = 540
-component_height = canvas_height + 120
+# 全体の高さを設定（ボタンやスコアの余白を含む）
+component_height = 660
 
 # JavaScript & HTML5 Canvas による円形ブロック崩しコード
 game_code = """
@@ -27,8 +25,9 @@ const ctx = canvas.getContext("2d");
 const statusDiv = document.getElementById("status");
 const retryBtn = document.getElementById("retryBtn");
 
-canvas.width = """ + str(canvas_width) + """;
-canvas.height = """ + str(canvas_height) + """;
+// 画面サイズをJavaScript側で直接指定（エラーの原因を排除）
+canvas.width = 600;
+canvas.height = 540;
 
 let animationId;
 let audioCtx = null;
@@ -36,14 +35,14 @@ let audioCtx = null;
 // ゲーム状態管理
 let gameActive = false;
 
-// パドル（プレイヤー：画像のような黄緑と白のバー）
+// パドル（プレイヤー）
 let paddleHeight = 12;
 let paddleWidth = 110;
 let paddleX;
 let rightPressed = false;
 let leftPressed = false;
 
-// ボール（追尾軌跡付きのハッキング弾）
+// ボール
 let ballRadius = 6;
 let x, y, dx, dy;
 let ballHistory = []; // 軌跡用
@@ -55,7 +54,7 @@ let bricks = [];
 let rotationAngle = 0; // 回転角度
 const rotationSpeed = 0.015; // 回転速度
 
-// タイマー設定（画像通りカウントダウン）
+// タイマー設定
 let startTime;
 const timeLimit = 60; // 制限時間60秒
 let timeLeft = timeLimit;
@@ -136,21 +135,16 @@ function initGame() {
 
 retryBtn.addEventListener("click", initGame);
 
-// 円形ブロックとの当たり判定
 function collisionDetection() {
     for (let i = 0; i < bricks.length; i++) {
         let b = bricks[i];
         if (b.status === 1) {
-            // 現在の回転を考慮したブロックの角度
             let currentAngle = b.angleOffset + rotationAngle;
-            // ブロックの中心座標を計算
             let bX = centerX + Math.cos(currentAngle) * b.radius;
             let bY = centerY + Math.sin(currentAngle) * b.radius;
 
-            // 簡易的な円形判定（ボールとの距離）
             let dist = Math.hypot(x - bX, y - bY);
             if (dist < (b.width / 2 + ballRadius)) {
-                // 反転（中心から外側へ向かうベクトルで反射）
                 let angleToBall = Math.atan2(y - centerY, x - centerX);
                 dx = Math.cos(angleToBall) * 5;
                 dy = Math.sin(angleToBall) * 5;
@@ -158,7 +152,6 @@ function collisionDetection() {
                 b.status = 0;
                 playSound('brick');
 
-                // 全滅チェック
                 if (bricks.every(brick => brick.status === 0)) {
                     gameActive = false;
                     statusDiv.innerHTML = "脱出成功！セキュリティ解除！";
@@ -171,30 +164,25 @@ function collisionDetection() {
 }
 
 function drawUI() {
-    // 外枠（画像のようなクラシックな装飾線）
     ctx.strokeStyle = "#b8a265";
     ctx.lineWidth = 2;
     ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
     
-    // スコア計算（破壊数）
     let destroyed = bricks.filter(b => b.status === 0).length;
     let total = bricks.length;
     let scoreStr = String(destroyed).padStart(3, '0');
 
-    // UIテキスト描画（画像上のレイアウトを再現）
     ctx.fillStyle = "#d1c292";
     ctx.font = "20px monospace";
     ctx.textAlign = "left";
     ctx.fillText("⚫︎ BALL 1", 40, 45);
     ctx.fillText("SCORE " + scoreStr + "/" + total, 200, 45);
     
-    // タイマー描画
     ctx.textAlign = "right";
     ctx.fillText("TIMER " + timeLeft.toFixed(2), canvas.width - 40, 45);
 }
 
 function drawCore() {
-    // 中央の赤いコアコア（ハッキング目標）
     ctx.beginPath();
     ctx.arc(centerX, centerY, 30, 0, Math.PI * 2);
     ctx.fillStyle = "#110002";
@@ -204,7 +192,6 @@ function drawCore() {
     ctx.stroke();
     ctx.closePath();
 
-    // コア内の幾何学模様
     ctx.beginPath();
     ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
     ctx.strokeStyle = "#ff3333";
@@ -214,7 +201,7 @@ function drawCore() {
 }
 
 function drawBricks() {
-    rotationAngle += rotationSpeed; // 毎フレーム回転させる
+    rotationAngle += rotationSpeed;
 
     for (let i = 0; i < bricks.length; i++) {
         let b = bricks[i];
@@ -225,9 +212,8 @@ function drawBricks() {
 
             ctx.save();
             ctx.translate(bX, bY);
-            ctx.rotate(currentAngle + Math.PI/2); // 円の接線方向に傾ける
+            ctx.rotate(currentAngle + Math.PI/2);
 
-            // 画像のようなライトイエロー/黄緑のサイバーブロック
             ctx.beginPath();
             ctx.rect(-b.width / 2, -b.height / 2, b.width, b.height);
             ctx.fillStyle = "rgba(209, 194, 146, 0.8)";
@@ -242,7 +228,6 @@ function drawBricks() {
 }
 
 function drawBall() {
-    // 軌跡の描画（画像のように弾が線を引くエフェクト）
     ballHistory.push({ x: x, y: y });
     if (ballHistory.length > 8) ballHistory.shift();
 
@@ -254,7 +239,6 @@ function drawBall() {
         ctx.closePath();
     }
 
-    // 本体
     ctx.beginPath();
     ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
@@ -264,7 +248,6 @@ function drawBall() {
 
 function drawPaddle() {
     ctx.save();
-    // 画像通りの黄緑と白のツートンカラーパドル
     let grad = ctx.createLinearGradient(paddleX, canvas.height - 35, paddleX, canvas.height - 35 + paddleHeight);
     grad.addColorStop(0, "#ffffff");
     grad.addColorStop(0.5, "#aaff00");
@@ -282,11 +265,9 @@ function drawPaddle() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // 背景をうっすら赤暗く
     ctx.fillStyle = "#200a0d";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // タイマー計算
     if (gameActive) {
         let elapsed = (Date.now() - startTime) / 1000;
         timeLeft = Math.max(0, timeLimit - elapsed);
@@ -307,5 +288,18 @@ function draw() {
     if (gameActive) {
         collisionDetection();
 
-        // 壁反射
         if (x + dx > canvas.width - 25 - ballRadius || x + dx < 25 + ballRadius) dx = -dx;
+        if (y + dy < 60 + ballRadius) dy = -dy;
+        
+        else if (y + dy > canvas.height - 35 - ballRadius) {
+            if (x > paddleX && x < paddleX + paddleWidth) {
+                let hitPos = (x - paddleX) / paddleWidth;
+                dx = 8 * (hitPos - 0.5);
+                dy = -Math.sqrt(40 - dx*dx);
+                playSound('paddle');
+            } else if (y + dy > canvas.height - 15) {
+                gameActive = false;
+                statusDiv.innerHTML = "GAME OVER：身柄が拘束されました";
+                statusDiv.style.color = "#ff0000";
+                playSound('gameover');
+                return;
